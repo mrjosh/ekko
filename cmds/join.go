@@ -422,7 +422,7 @@ func connectionKeepAlive(client *websocket.Conn) {
 	for {
 		<-ticket.C
 		// Sending ping request
-		log.Println("Sending ping request")
+		//log.Println("Sending ping request")
 		client.WriteJSON(map[string]string{"type": "ping"})
 	}
 

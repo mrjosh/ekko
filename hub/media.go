@@ -297,6 +297,13 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			switch packet.Type {
 
+			case "ping":
+				packetData, _ := json.Marshal(&Packet{Type: "pong"})
+				if err := wsutil.WriteServerText(conn, packetData); err != nil {
+					log.Fatal(err)
+				}
+				break
+
 			case "relaySessionDescription":
 
 				room, err := h.FindRoom(packet.RoomId)
@@ -330,6 +337,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if err := wsutil.WriteServerText(conn, packetData); err != nil {
 					log.Fatal(err)
 				}
+				break
+
 			case "negotiationneeded":
 
 				room, err := h.FindRoom(packet.RoomId)
@@ -352,7 +361,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if err := user.peer.SetRemoteDescription(sd); err != nil {
 					log.Println(err)
 				}
-
 				break
 
 			case "join":
@@ -400,7 +408,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if err := user.peer.AddICECandidate(iceCandidate); err != nil {
 					log.Println("Err on adding iceCandidate: ", err)
 				}
-
 				break
 
 			}
