@@ -19,9 +19,6 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v2
 
-      - name: Run tests
-        run: go test ./tests -race
-
       - name: Set up Docker Buildx
         uses: crazy-max/ghaction-docker-buildx@v2
         with:
