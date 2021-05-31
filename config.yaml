@@ -1,5 +1,3 @@
-gateway: "gateway.mrjosh.net"
-
 peerConnectionConfig:
   iceServers:
   - urls: 

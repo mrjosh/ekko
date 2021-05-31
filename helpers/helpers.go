@@ -1,7 +1,9 @@
-package main
+package helpers
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +11,26 @@ import (
 
 	"github.com/fatih/color"
 )
+
+func EncodeBase64(obj interface{}) (string, error) {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+func DecodeBase64(in string, obj interface{}) error {
+	b, err := base64.StdEncoding.DecodeString(in)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(b, obj)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func NewInput(name, description string, required bool) (string, error) {
 	reader := bufio.NewReader(os.Stdin)

@@ -1,8 +1,6 @@
-package main
+package helpers
 
 import (
-	"github.com/castyapp/cli/components"
-
 	"github.com/pion/webrtc/v3"
 )
 
@@ -21,5 +19,5 @@ func CreateOffer(peerConnection *webrtc.PeerConnection) (string, error) {
 
 	<-gatherComplete
 
-	return components.Encode(offer), nil
+	return EncodeBase64(offer)
 }
