@@ -47,6 +47,7 @@ func NewServerCommand() *cobra.Command {
 			}
 
 			router.HandleFunc("/", svc.ServeHTTP)
+			router.HandleFunc("/room.json", svc.HTTPHandlerFindRoom)
 
 			log.Printf("[GATEWAY] server running and listeting on ws://%s:%d", cFlags.Host, cFlags.Port)
 			return fmt.Errorf("http_err: %v", http.Serve(listener, router))

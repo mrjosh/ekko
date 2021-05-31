@@ -42,6 +42,7 @@ type JoinVoiceChannelFlags struct {
 func NewJoinVoiceChannelCommand() *cobra.Command {
 
 	log.SetFlags(0)
+	//log.SetFlags(log.Lshortfile)
 
 	cFlags := &JoinVoiceChannelFlags{
 		GatewayURI: "gateway.mrjosh.net",
@@ -88,8 +89,7 @@ func NewJoinVoiceChannelCommand() *cobra.Command {
 
 				s.Stop()
 
-				var wsResponseBody []byte
-				wsResponseBody, err = ioutil.ReadAll(wsResponse.Body)
+				wsResponseBody, _ := ioutil.ReadAll(wsResponse.Body)
 
 				return errors.New(fmt.Sprintf(
 					"[%s] Could not connect to media server. REASON: [%v] BODY: %s",
