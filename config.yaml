@@ -1,0 +1,9 @@
+gateway: "gateway.mrjosh.net"
+
+peerConnectionConfig:
+  iceServers:
+  - urls: 
+    - "turn:coturn.mrjosh.net:3478?transport=udp"
+    credential: "12345"
+    username: "josh"
+

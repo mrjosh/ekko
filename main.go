@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/castyapp/cli/components"
+	"github.com/castyapp/cli/config"
+	"github.com/castyapp/cli/sounds"
 	"github.com/fatih/color"
 
 	"github.com/gordonklaus/portaudio"
@@ -20,11 +23,39 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const gatewayURI = "gateway.mrjosh.net"
+var (
+	configFile *string
+	gatewayURI *string
+	debug      *bool
+)
 
 func main() {
 
+	configFile = flag.String("config-file", "", "Configfile")
+	gatewayURI = flag.String("gateway-uri", "gateway.mrjosh.net", "Gateway uri")
+	debug = flag.Bool("debug", false, "Debug mode")
+	flag.Parse()
+
 	log.SetFlags(0)
+	if *debug {
+		log.SetFlags(log.Lshortfile)
+	}
+
+	if *configFile != "" {
+		if err := config.LoadFile(*configFile); err != nil {
+			log.Println(fmt.Sprintf(
+				"[%s] cannot load config file [%s] going with the defaults!",
+				color.YellowString("Config"),
+				*configFile,
+			))
+		} else {
+			log.Println(fmt.Sprintf(
+				"[%s] configfile loaded. [%s]",
+				color.CyanString("Config"),
+				*configFile,
+			))
+		}
+	}
 
 	username, err := NewInput("username", "Enter your nickname: ", true)
 	if err != nil {
@@ -36,7 +67,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	response, err := http.Get(fmt.Sprintf("https://%s/room.json?room_id=%s", gatewayURI, room))
+	portaudio.Initialize()
+	defer portaudio.Terminate()
+
+	response, err := http.Get(fmt.Sprintf("https://%s/room.json?room_id=%s", *gatewayURI, room))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +79,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("wss://%s", gatewayURI), nil)
+	client, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("wss://%s", *gatewayURI), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,20 +95,13 @@ func main() {
 	}
 
 	// PeerConnection Configuration
-	var peerConnectionConfig = webrtc.Configuration{
-		BundlePolicy:  webrtc.BundlePolicyMaxCompat,
-		RTCPMuxPolicy: webrtc.RTCPMuxPolicyRequire,
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{"stun:stun.l.google.com:19302"},
-			},
-			{
-				URLs:       []string{"turn:78.47.129.161:3478?transport=udp"},
-				Credential: "12345",
-				Username:   "josh",
-			},
-		},
-	}
+	peerConnectionConfig := config.WebrtcPeerConnectionConfig()
+
+	log.Println(fmt.Sprintf(
+		"[%s] ICEServers: %s",
+		color.CyanString("PeerConnection"),
+		peerConnectionConfig.ICEServers,
+	))
 
 	// Create a new RTCPeerConnection
 	peerConnection, err := peerConnectionFactory.NewPeerConnection(peerConnectionConfig)
@@ -86,17 +113,20 @@ func main() {
 		log.Println(fmt.Sprintf("[%s] Connection State Changed: %s", color.CyanString("PeerConnection"), connectionState.String()))
 	})
 
+	clientJoined := false
 	peerConnection.OnICECandidate(func(i *webrtc.ICECandidate) {
 		if i != nil {
 
 			log.Println(fmt.Sprintf("[%s] New Ice Candidate [%s]", color.CyanString("PeerConnection"), i.ToJSON().Candidate))
 
-			//client.WriteJSON(map[string]interface{}{
-			//"type":    "relayICECandidate",
-			//"data":    i.ToJSON(),
-			//"user_id": username,
-			//"room_id": room,
-			//})
+			if clientJoined {
+				client.WriteJSON(map[string]interface{}{
+					"type":    "relayICECandidate",
+					"data":    i.ToJSON(),
+					"user_id": username,
+					"room_id": room,
+				})
+			}
 
 		}
 	})
@@ -123,11 +153,7 @@ func main() {
 				track.ID(), err)
 		})
 
-		_, err = peerConnection.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
-			Direction: webrtc.RTPTransceiverDirectionSendonly,
-		})
-
-		if err != nil {
+		if _, err = peerConnection.AddTrack(track); err != nil {
 			log.Fatal(err)
 		}
 
@@ -145,6 +171,24 @@ func main() {
 		"data":    offer,
 		"user_id": username,
 		"room_id": room,
+	})
+
+	peerConnection.OnNegotiationNeeded(func() {
+
+		log.Println(fmt.Sprintf("Negotiation Needed"))
+
+		offer, err := CreateOffer(peerConnection)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		client.WriteJSON(map[string]interface{}{
+			"type":    "negotiationneeded",
+			"data":    offer,
+			"user_id": username,
+			"room_id": room,
+		})
+
 	})
 
 	for {
@@ -169,14 +213,23 @@ func main() {
 			if err := peerConnection.AddICECandidate(ice); err != nil {
 				log.Fatal(err)
 			}
+			log.Println(fmt.Sprintf("[%s] AddICECandidate", color.CyanString("PeerConnection")))
 		case "answer":
-			answer := webrtc.SessionDescription{}
-			components.Decode(packet["data"], &answer)
-			if err := peerConnection.SetRemoteDescription(answer); err != nil {
+
+			description := webrtc.SessionDescription{}
+			components.Decode(packet["data"], &description)
+
+			if err := peerConnection.SetRemoteDescription(description); err != nil {
 				log.Fatal(err)
 			}
+
+			log.Println(fmt.Sprintf("[%s] [Answer] SetRemoteDescription", color.CyanString("PeerConnection")))
+
+			clientJoined = true
 			break
 		case "negotiationneeded":
+
+			log.Println(fmt.Sprintf("[%s] Negotiation Needed", color.CyanString("PeerConnection")))
 
 			offer := webrtc.SessionDescription{}
 			components.Decode(packet["data"], &offer)
@@ -185,17 +238,20 @@ func main() {
 				log.Fatal(err)
 			}
 
-			answerObj := webrtc.SessionDescription{}
-			answer := CreateAnswer(peerConnection)
-			components.Decode(answer, &answerObj)
+			log.Println(fmt.Sprintf("[%s] SetRemoteDescription", color.CyanString("PeerConnection")))
 
-			client.WriteJSON(map[string]string{
-				"type":    "relaySessionDescription",
-				"data":    answer,
-				"user_id": username,
-				"room_id": room,
-			})
-			log.Println(fmt.Sprintf("[%s] Negotiation Needed", color.CyanString("PeerConnection")))
+			if offer.Type == webrtc.SDPTypeOffer {
+				answerObj := webrtc.SessionDescription{}
+				answer := CreateAnswer(peerConnection)
+				components.Decode(answer, &answerObj)
+				client.WriteJSON(map[string]string{
+					"type":    "relaySessionDescription",
+					"data":    answer,
+					"user_id": username,
+					"room_id": room,
+				})
+			}
+
 			break
 		}
 
@@ -255,6 +311,14 @@ func newPeerConnectionFactory(m *webrtc.MediaEngine) (*webrtc.API, error) {
 
 func onPeerConnectionTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 
+	log.Println(fmt.Sprintf(
+		"[%s] %s joined the voice channel!",
+		color.MagentaString("UserJoined"),
+		color.GreenString(track.ID()),
+	))
+
+	sounds.UserJoined()
+
 	if track.Kind() == webrtc.RTPCodecTypeAudio {
 
 		var (
@@ -262,11 +326,13 @@ func onPeerConnectionTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiv
 			channels   = int(track.Codec().Channels)
 		)
 
-		log.Println(fmt.Sprintf("[%s] Received User's Audio Track", color.CyanString("OnTrack")))
-		log.Println(fmt.Sprintf("[%s] Track Channels, SampleRate: [%d:%d]", color.CyanString("OnTrack"), channels, sampleRate))
-
-		portaudio.Initialize()
-		defer portaudio.Terminate()
+		log.Println(fmt.Sprintf(
+			"[%s] Playing %s's Audio Track [ Channels:%d , SampleRate: %d]",
+			color.MagentaString("NewAudioTrack"),
+			color.WhiteString(track.ID()),
+			channels,
+			sampleRate,
+		))
 
 		out := make([]int16, 8192)
 		stream, err := portaudio.OpenDefaultStream(0, 2, float64(sampleRate), len(out), &out)
