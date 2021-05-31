@@ -18,11 +18,7 @@ ADD . /build
 # build project
 RUN go build -o casty .
 
-FROM alpine:latest
-
-COPY --from=builder /build/casty /usr/bin/casty
-
 EXPOSE 3000
 EXPOSE 62155
 
-ENTRYPOINT ["/usr/bin/casty", "server"]
+ENTRYPOINT ["/build/casty", "server"]
