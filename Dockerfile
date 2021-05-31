@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine AS builder
+FROM golang:1.16 AS builder
 
 LABEL maintainer="Alireza Josheghani <josheghani.dev@gmail.com>"
 
