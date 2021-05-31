@@ -25,4 +25,4 @@ COPY --from=builder /build/casty /usr/bin/casty
 EXPOSE 3000
 EXPOSE 62155
 
-ENTRYPOINT ["/usr/bin/casty"]
+ENTRYPOINT ["/usr/bin/casty", "server"]
