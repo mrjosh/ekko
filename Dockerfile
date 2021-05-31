@@ -2,9 +2,9 @@ FROM golang:1.16-alpine AS builder
 
 LABEL maintainer="Alireza Josheghani <josheghani.dev@gmail.com>"
 
-RUN apt update && apt -y upgrade
+RUN apt-get update && apt-get -y upgrade
 
-RUN apt install -y portaudio19-dev pkg-config libopus-dev libopusfile-dev
+RUN apt-get install -y portaudio19-dev pkg-config libopus-dev libopusfile-dev
 
 # For mac install these packages:
 # brew install pkg-config opus opusfile portaudio
